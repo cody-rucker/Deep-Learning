@@ -1,0 +1,15 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{using} \PYG{n}{Flux}
+
+\PYG{n}{W1} \PYG{o}{=} \PYG{n}{rand}\PYG{p}{(}\PYG{l+m+mi}{5}\PYG{p}{,}\PYG{l+m+mi}{2}\PYG{p}{)}
+\PYG{n}{b1} \PYG{o}{=} \PYG{n}{rand}\PYG{p}{(}\PYG{l+m+mi}{5}\PYG{p}{)}
+
+\PYG{n}{W2} \PYG{o}{=} \PYG{n}{rand}\PYG{p}{(}\PYG{l+m+mi}{1}\PYG{p}{,} \PYG{l+m+mi}{5}\PYG{p}{)}
+\PYG{n}{b2} \PYG{o}{=} \PYG{n}{rand}\PYG{p}{(}\PYG{l+m+mi}{1}\PYG{p}{)}
+
+\PYG{c}{\PYGZsh{} set nerual net parameters}
+\PYG{n}{ps} \PYG{o}{=} \PYG{n}{params}\PYG{p}{(}\PYG{n}{W1}\PYG{p}{,} \PYG{n}{b1}\PYG{p}{,} \PYG{n}{W2}\PYG{p}{,} \PYG{n}{b2}\PYG{p}{)}
+
+\PYG{c}{\PYGZsh{} build a simple neural net}
+\PYG{n}{u}\PYG{p}{(}\PYG{n}{x}\PYG{p}{,} \PYG{n}{W1}\PYG{p}{,} \PYG{n}{b1}\PYG{p}{,} \PYG{n}{W2}\PYG{p}{,} \PYG{n}{b2}\PYG{p}{)} \PYG{o}{=} \PYG{n}{sum}\PYG{p}{(}\PYG{n}{W2}\PYG{o}{*}\PYG{n}{tanh}\PYG{o}{.}\PYG{p}{(}\PYG{n}{W1}\PYG{o}{*}\PYG{n}{x} \PYG{o}{.+} \PYG{n}{b1}\PYG{p}{)} \PYG{o}{.+} \PYG{n}{b2}\PYG{p}{)}
+\end{Verbatim}

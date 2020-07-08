@@ -1,0 +1,5 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{∇u} \PYG{o}{=} \PYG{n}{gradient}\PYG{p}{(}\PYG{n}{ps}\PYG{p}{)} \PYG{k}{do}
+    \PYG{n}{sum}\PYG{p}{(}\PYG{n}{uₓ}\PYG{p}{(}\PYG{n}{x}\PYG{p}{,} \PYG{n}{W1}\PYG{p}{,} \PYG{n}{b1}\PYG{p}{,} \PYG{n}{W2}\PYG{p}{,} \PYG{n}{b2}\PYG{p}{))}
+\PYG{k}{end}
+\end{Verbatim}

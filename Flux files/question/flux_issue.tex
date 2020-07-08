@@ -1,0 +1,88 @@
+\documentclass[12pt]{article}
+
+% needed to use minted with julia (compile with LuaLaTeX
+\usepackage{lineno}
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setmonofont{DejaVu Sans Mono}[Scale=MatchLowercase]
+\usepackage{minted}
+\usepackage{latexsym, exscale, stmaryrd, amsmath, amssymb}
+\usepackage{unicode-math}
+%----------------------------------------------------------
+
+\usepackage{graphicx}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage{mdframed}
+\usepackage[margin=1.2in]{geometry}
+
+\definecolor{bg}{rgb}{0.95,0.95,0.95}
+
+
+\begin{document}
+\begin{flushleft}
+
+I start with a simple neural net with weights $W1, W2$ and biases $b1, b2$.
+\begin{mdframed}[backgroundcolor=bg]
+\begin{minted}[xleftmargin=20pt]{julia}
+using Flux
+
+W1 = rand(5,2)
+b1 = rand(5)
+
+W2 = rand(1, 5)
+b2 = rand(1)
+
+# set nerual net parameters
+ps = params(W1, b1, W2, b2)
+
+# build a simple neural net
+u(x, W1, b1, W2, b2) = sum(W2*tanh.(W1*x .+ b1) .+ b2)
+
+\end{minted}
+\end{mdframed}
+
+\vspace{0.25cm}
+
+Using Flux.jl I can differentiate $u$ with respect to $x$ 
+\vspace{0.25cm}
+
+\begin{mdframed}[backgroundcolor=bg]
+\begin{minted}[xleftmargin=20pt]{julia}
+uₓ = (x, W1, b1, W2, b2) -> gradient(
+                       x -> u(x, W1, b1, W2, b2), x)[1]
+\end{minted}
+\end{mdframed}
+
+\vspace{0.25cm}
+
+Now, If I want, I can differentiate $u_x$ with respect to any of the weights and biases with out any issue.
+\vspace{0.25cm}
+
+\begin{mdframed}[backgroundcolor=bg]
+\begin{minted}[xleftmargin=20pt]{julia}
+∇u = gradient(ps) do
+    sum(uₓ(x, W1, b1, W2, b2))
+end
+\end{minted}
+\end{mdframed}
+
+\vspace{0.25cm}
+
+The issue arises if I try to differentiate $u_x$ with respect to $x$ before computing the gradient with respect to the weights and biases.
+
+\begin{mdframed}[backgroundcolor=bg]
+\begin{minted}[xleftmargin=20pt]{julia}
+uₓₓ = (x, W1, b1, W2, b2) -> gradient(
+                        x -> sum(uₓ(x, W1, b1, W2, b2)), x)[1]
+
+∇ = gradient(ps) do
+    sum(uₓₓ(x, W1, b1, W2, b2))
+end
+\end{minted}
+\end{mdframed}
+
+\end{flushleft}
+\end{document}
