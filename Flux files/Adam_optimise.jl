@@ -22,7 +22,7 @@ julia> A = [ 1 2 -3]
 julia> j = find_pivot(A)
 ```
 """
-function Adam(θ::AbstractArray{Float32}, ∇::AbstractArray{Float32})
+function Adam(θ::AbstractArray{Float64}, ∇::AbstractArray{Float64})
   m   = zeros(size(θ))
   v   = zeros(size(θ))
   β₁  = 0.9
@@ -33,7 +33,7 @@ function Adam(θ::AbstractArray{Float32}, ∇::AbstractArray{Float32})
   Adam(θ, ∇, m, v, β₁, β₂, α, ϵ, t)
 end
 
-function Adam_update!(θ::AbstractArray{Float32}, W̄::Adam, ∇θ::AbstractArray{Float32}, t::Int64)
+function Adam_update!(θ::AbstractArray{Float64}, W̄::Adam, ∇θ::AbstractArray{Float64}, t::Int64)
     # initialize parameter array along with 1st and second moments
     W̄.∇ = ∇θ
 
