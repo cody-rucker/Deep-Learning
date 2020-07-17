@@ -102,6 +102,15 @@ function cost(x, t,  x̂, t̂, ẋ, ṫ, x₀, t₀, x₁, t₁)
 end
 
 # initialize Adam objects to store optimization parameters
+#Wx = Adam(Wₓ, Wₓ)
+#Wt = Adam(Wₜ, Wₜ)
+#b₁ = Adam(b1, b1)
+
+#W₂ = Adam(W2, W2)
+#b₂ = Adam(b2, b2)
+
+#W₃ = Adam(W3, W3)
+#b₃ = Adam(b3, b3)
 Wx = Adam(Wₓ, Wₓ)
 Wt = Adam(Wₜ, Wₜ)
 b₁ = Adam(b1, b1)
@@ -112,11 +121,12 @@ b₂ = Adam(b2, b2)
 W₃ = Adam(W3, W3)
 b₃ = Adam(b3, b3)
 
-
 # training loop: Adam optimization
 @showprogress "Training..." for n = 1:M
     sleep(0.1)
     for i = 1:batch_size
+
+
 
         x = rand(0:0.001:1, 1, 1)[1]              # random x∈   Ω×[0,T]
         t = rand(0:0.001:1, 1, 1)[1]
@@ -165,17 +175,18 @@ err(x, t) = uexact.(x, t) - u(x, t)# θ)
         Z[j,i] = u(xfine[j], v[i])
     end
 end
-
+#=
 @inbounds for i = 1:2:length(v)
     p1 = plot(xfine, u.(xfine[:], v[i]), size=(1000, 750), ylims=(0, 1.0), lw=1.5,
                             legend=:topright, label = "network")
 
     plot!(xfine, uexact.(xfine[:], v[i]), label="exact")
 
-    p2 = plot(xfine, err.(xfine[:], v[i]), ylims = (0.1, 0.1), label="error", color=:red)
+    p2 = plot(xfine, err.(xfine[:], v[i]), ylims = (-0.1, 0.1), label="error", color=:red)
 
     p = plot(p1, p2, layout = (2,1), size=(1000, 750))
 
     #plot!(xfine, uexact.(xfine[:] .+ c*t[i]), label="exact")
     display(p)
 end
+=#

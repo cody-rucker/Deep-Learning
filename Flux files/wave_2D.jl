@@ -2,7 +2,6 @@ using Flux
 using ForwardDiff
 using ProgressMeter
 using Plots
-using IJulia
 include("Adam_optimise.jl")
 
 
@@ -55,17 +54,6 @@ uₜ(x, y, t) = sum( W3 * ( dσ.( W2 * σ.(Wₓ*x .+ Wᵧ.+ Wₜ*t .+ b1) .+ b2)
 uᵧ(x, y, t) = sum( W3 * ( dσ.( W2 * σ.(Wₓ*x .+ Wᵧ.+ Wₜ*t .+ b1) .+ b2) .*
                       (W2 * (dσ.(Wₓ*x .+ Wᵧ.+ Wₜ*t .+ b1) .* Wᵧ)) ))
 
-
-# verify accuracy of derivatives with forward AD
-x = 1.0
-y = 1.0
-t = 2.0
-@assert uₓ(x, y, t) ≈ ForwardDiff.derivative(x -> u(x, y,t), x)
-@assert uᵧ(x, y, t) ≈ ForwardDiff.derivative(y -> u(x, y,t), y)
-@assert uₜ(x, y, t) ≈ ForwardDiff.derivative(t -> u(x, y,t), t)
-#uₓ(x, y, t) = sum(W2 * (dσ.(Wₓ*x .+ Wₜ*t .+ b1) .* Wₓ))
-#uₜ(x, y, t) = sum(W2 * (dσ.(Wₓ*x .+ Wₜ*t .+ b1) .* Wₜ))
-
 # second-order derivatives ( these ones arent as accurate check work later)
 function uₓₓ(x, y,  t)
     Σ = Wₓ*x .+ Wᵧ*y .+ Wₜ*t .+ b1
@@ -96,21 +84,22 @@ function uᵧᵧ(x, y, t)
 
     return sum(W3 * (a .+ b))
 end
+# verify accuracy of derivatives with forward AD
+x = 1.0
+y = 1.0
+t = 2.0
 
-#=
-function uᵧᵧ(x, y, t)
-    Σ = Wₓ*x .+ Wᵧ*y .+ Wₜ*t .+ b1
+ux = (x, y, t) -> ForwardDiff.derivative(x -> u(x, y, t), x)
+uy = (x, y, t) -> ForwardDiff.derivative(y -> u(x, y, t), y)
+ut = (x, y, t) -> ForwardDiff.derivative(t -> u(x, y, t), t)
 
-    a = W3 *( d²σ.( W2 * σ.(Σ)) .*
-            (W2 * (dσ.(Σ) .* Wᵧ)).^2)
+@assert uₓ(x, y, t) ≈ ux(x, y, t)
+@assert uᵧ(x, y, t) ≈ uy(x, y, t)
+@assert uₜ(x, y, t) ≈ ut(x, y, t)
 
-    b = W3 * (dσ.(W2 * σ.(Σ) .+ b2) .*
-              (W2 * (d²σ.(Σ) .* Wᵧ.^2)))
-    return sum(a + b)
-end
-=#
-#uₓₓ(x, y, t) = sum(W2 * (d²σ.(Wₓ*x .+ Wₜ*t .+ b1) .* Wₓ .* Wₓ))
-#uₜₜ(x, y, t) = sum(W2 * (d²σ.(Wₓ*x .+ Wₜ*t .+ b1) .* Wₜ .* Wₜ)) #slightly disagrees with autograd...
+@assert uₓₓ(x, y, t) ≈ ForwardDiff.derivative(x -> ux(x, y, t), x)
+@assert uᵧᵧ(x, y, t) ≈  ForwardDiff.derivative(y -> uy(x, y, t), y)
+@assert uₜₜ(x, y, t) ≈ ForwardDiff.derivative(t -> ut(x, y, t), t)
 
 #=
 Define a physics informed neural net
@@ -129,13 +118,13 @@ function cost(x, y, t,
               x₁, y₁, t₁,
               x̄₀, ȳ₀, t̄₀,
               x̄₁, ȳ₁, t̄₁)
-    sum(abs.(f(x, y, t)).^2 +                     # enforce structure of the PDE
+    sum(abs.(f(x, y, t)).^2 +                        # enforce structure of the PDE
         abs.(u(x̂, ŷ, t̂) .- η.(x̂, ŷ)).^2 +            # initial displacement
-        abs.(uₜ(ẋ, ẏ, ṫ) .- γ.(ẋ, ẏ)).^2 +            # initial velocity
-        abs.(u(x₀, y₀, t₀) .- xb₀.(y₀,t₀)).^2 +         # b.c at x=0
-        abs.(u(x₁, y₁, t₁) .- xb₁.(y₁,t₁)).^2 +        # b.c at x=1
-        abs.(u(x̄₀, ȳ₀, t̄₀) .- yb₀.(x̄₀,t̄₀)).^2 +         # b.c at y=0
-        abs.(u(x̄₁, ȳ₁, t̄₁) .- yb₁.(x̄₁,t̄₁)).^2   )      # b.c at y= 1
+        abs.(uₜ(ẋ, ẏ, ṫ) .- γ.(ẋ, ẏ)).^2 +           # initial velocity
+        abs.(u(x₀, y₀, t₀) .- xb₀.(y₀,t₀)).^2 +      # b.c at x=0
+        abs.(u(x₁, y₁, t₁) .- xb₁.(y₁,t₁)).^2 +      # b.c at x=1
+        abs.(u(x̄₀, ȳ₀, t̄₀) .- yb₀.(x̄₀,t̄₀)).^2 +      # b.c at y=0
+        abs.(u(x̄₁, ȳ₁, t̄₁) .- yb₁.(x̄₁,t̄₁)).^2  )     # b.c at y= 1
 end
 
 # initialize Adam objects to store optimization parameters
@@ -151,27 +140,27 @@ W₃ = Adam(W3, W3)
 b₃ = Adam(b3, b3)
 
 # training loop: Adam optimisation
-@showprogress "Training..." for n = 1:M
+@showprogress "Training..." @inbounds for n = 1:M
     sleep(0.1)
-    for i = 1:batch_size
+    @inbounds for i = 1:batch_size
 
-        x = rand(0:0.001:1, 1, 1)[1]          # random x∈   Ω×[0,T]
+        x = rand(0:0.001:1, 1, 1)[1]
         y = rand(0:0.001:1, 1, 1)[1]
         t = rand(0:0.001:1, 1, 1)[1]
 
-        x̂ = rand(0:0.001:1, 1, 1)[1]          # random x∈   Ω×{0}
+        x̂ = rand(0:0.001:1, 1, 1)[1]
         ŷ = rand(0:0.001:1, 1, 1)[1]
         t̂ = 0.0
 
-        ẋ = rand(0:0.001:1, 1, 1)[1]          # random x∈   Ω×{0}
+        ẋ = rand(0:0.001:1, 1, 1)[1]
         ẏ = rand(0:0.001:1, 1, 1)[1]
         ṫ = 0.0
 
-        x₀ =0.0                              # random x∈ {0}×[0,T]
+        x₀ =0.0
         y₀ = rand(0:0.001:1.0, 1, 1)[1]
         t₀ = rand(0:0.001:1.0, 1, 1)[1]
 
-        x₁ = 1.0                             # random x∈ {1}×[0,T]
+        x₁ = 1.0
         y₁ = rand(0:0.001:1.0, 1, 1)[1]
         t₁ = rand(0:0.001:1.0, 1, 1)[1]
 
@@ -198,12 +187,6 @@ b₃ = Adam(b3, b3)
         Adam_update!(b2, b₂, ∇u[b2], i)
         Adam_update!(W3, W₃, ∇u[W3], i)
         Adam_update!(b3, b₃, ∇u[b3], i)
-
-    # Stochastic gradient descent (SGD)
-    #    @inbounds for j = 1:length(θ)
-    #        θ[j] .-= α .* ∇u[θ[j]]
-    #    end
-    #    @show cost(x, t,  x̂, t̂, ẋ, ṫ, x₀, t₀, x₁, t₁)
     end
 end
 
@@ -216,52 +199,19 @@ s = 0:0.01:1
 Z = zeros(length(r), length(s), length(τ))
 V = zeros(length(r), length(s), length(τ))
 E = zeros(length(r), length(s), length(τ))
-for i = 1:length(τ)
-    for j = 1:length(s)
-        for k = 1:length(r)
+@inbounds for i = 1:length(τ)
+    @inbounds for j = 1:length(s)
+        @inbounds for k = 1:length(r)
             Z[k, j, i] = u(r[k], s[j], τ[i])
             V[k, j, i] = uexact(r[k], s[j], τ[i])
             E[k, j, i] = V[k, j, i] - Z[k, j, i]
         end
     end
 end
+
+
 #=
-plt = plot3d(st=:surface, xlim=(-0,1), ylim=(0,1), zlim=(-1,1),
-                title = "wave", marker = 2,
-                xlabel="x", ylabel="y", zlabel="z",
-                size=(1920, 1080),
-                label="")
-anim = @animate
-for i = 1:length(τ)
-
-        p = plot3d(r, s, Z[:,:,i]), st=:surface, size=(1920, 1080), show=true)# xlim=(-0,1), ylim=(0,1), zlim=(-1,1),
-                        #title = "wave", marker = 2,
-                        #xlabel="x", ylabel="y", zlabel="z",
-                        #size=(1920, 1080),
-                        #label="")
-        display(p)
-
-    end
-    =#
-
 pyplot()
-#plot(legend=true, size=(1920, 1080)
-#anim = @animate
-#for i = 1:length(τ)
-        #plot(x,exact(x[:],t[i]))
-        #plot(x[:], [U[:,i], exact(x[:], t[i])])
-        #p1 = plot(r, s,Z[:,:,i], st=:surface, title="exact")
-        #p2 = plot(x, [U1[:,i],U2[:,i]], label=labels, shape=markershapes)
-        #p = plot(p1,p2, layout=(1,2))
-#        display(pp)
-#    end
-#    gif(anim, "anim_fps30.gif", fps = 30)
-
-#pyplot()
-
-
-#=
-
 anim = @animate for i = 1:length(τ)
     p1 = plot(r, s, Z[:, :, i], st=:surface, title="network")
     p2 = plot(r, s, V[:, :, i], st=:surface, title="exact")
