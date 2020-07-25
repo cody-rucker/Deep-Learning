@@ -1,94 +1,75 @@
 using ChainRules
+using Flux
+using Zygote
 struct Affine
   W
   b
 end
 
-Affine(in::Integer, out::Integer) =
-  Affine(randn(out, in), randn(out))
+Affine(in::Integer, out::Integer) = Affine(randn(out, in), randn(out))
 
+struct InputLayer
+    Wₓ
+    Wₜ
+    b
+end
+
+InputLayer(in::Integer, out::Integer) = InputLayer(randn(out, 1), randn(out, 1), randn(out))
+
+(m::InputLayer)(x, t) = m.Wₓ*x .+ m.Wₜ*t .+ m.b
 #(m::Affine)(x, t) = m.W[:, 1] * x + m.W[:, 2]*t .+ m.b
 (m::Affine)(x) = m.W*x .+ m.b
-a = Affine(1, 1)
-function u(x)
-    y₁ = a.W * x
-    y₂ = y₁ .+ a.b
-    y₃ = broadcast(tanh, y₂)
-end
 
-function ChainRulesCore.frule((Δself, ẋ), ::typeof(a), x)
-    Y = a(x)
-    function a_pushforward(Δself, ẋ)
-        return a.W *ẋ
+# ChainRules
+function frule((Δself, ẋ, ṫ), β::InputLayer, x, t)
+    Y = β(x, t)
+    function β_pushforward(Δself, ẋ, ṫ)
+        return β.Wₓ *ẋ + β.Wₜ*ṫ
     end
-    return Y, a_pushforward(Δself, ẋ)
+    return Y, β_pushforward
 end
 
-# calculate forward propogation of input wiggles
-y₁, y₁̇ = frule((NO_FIELDS, 1), a, x)
-y₂, y₂̇ = frule((NO_FIELDS, y₁̇  ), +, y₁, a.b)
-#=
-function ChainRules.frule((NO_FIELDS, Δx, Δt ), ::typeof(a), x, t)
-  function pushforward(Δx, Δt)
-    return a.W[:,1]*Δx + a.W[:, 2]*Δt #ChainRules.NO_FIELDS, a.W[:, 1]*dargx, a.W[:, 2]*dargt
-   end
-   return a(x, t), pushforward
- end
-=#
- # good:
- #function frule(::typeof(foo), x)
-#     Y = foo(x)
-#     function foo_pushforward(_, ẋ)
-#         return bar(ẋ)
-#     end
-#     return Y, foo_pushforward
- #end
-
- # good:
-function ChainRulesCore.frule((Δself, ẋ, ṫ), ::typeof(a), x, t)
-    Y = a(x, t)
-    function a_pushforward(Δself, ẋ, ṫ)
-        return a.W[:, 1]ẋ + a.W[:, 2]ṫ
+function frule((Δself, ẋ), α::Affine, x)
+    Y = α(x)
+    function α_pushforward(Δself, ẋ)
+        return α.W * ẋ
     end
-    return Y, a_pushforward(Δself, ẋ, ṫ)
+    return Y, α_pushforward
 end
 
-function foo(x, t)
-    q = tanh.(a(x, t))
-end
-#=
-function rrule(::typeof(foo), x)
-    Y = foo(x)
-    function foo_pullback(x̄)
-        return NO_FIELDS, bar(x̄)
+function frule((Δself, ẋ), ::typeof(σ), x)
+    Y = σ.(x)
+    function σ_pushforward(Δself, ẋ)
+        return σ'.(x).*ẋ
     end
-    return Y, foo_pullback
-end
-=#
-#=
-function foo(x)
-    u = sin(x)
-    v = asin(b)
-    return v
+    return Y, σ_pushforward
 end
 
-x = π/4
-ẋ = 1 #∂x/∂x
 
-u, u̇ = frule((NO_FIELDS, ẋ), sin, x) # ∂u/∂x
-# frule takes arguments
-#   frule((Δf, Δx...), f, x...)
-# so in the following example * has nofield and 2 is constant so
-# our first two args below are dself and the final one is the derivative of
-# a w.r.t x
-v, v̇ = frule((NO_FIELDS, u̇), asin, u) # ∂v/∂x = ∂v/∂u * ∂u/∂x
+function aₓ(x, t)
+    z1, ż1 = frule((θ, 1, 0), a, x, t)
+    z2, ż2 = frule((θ, unthunk(ż1)), σ, z1)
+    z3, ż3 = frule((θ, unthunk(ż2)), b, z2)
 
-# Try doing this to a NN model
-
-function û(x, W, b)
-    z = W*x
-    z₁ = z .+ b
-    u = tanh.(z₁)
-    return u
+    return sum(ż3(θ, ż2(θ, ż1(θ, 1, 0))))
 end
-=#
+
+a = InputLayer(2,3)
+b = Affine(3,1)
+θ = params(a.Wₓ, a.Wₜ, a.b, b.W, b.b)
+
+function g(x,t)
+    z1 = a(x,t)
+    z2 = σ.(z1)
+    z3 = b(z2)
+end
+
+z1, ż1 = frule((θ, 1, 0), a, x, t)
+z2, ż2 =  frule((θ, unthunk(ż1)), σ, z1)
+z3, ż3 = frule((θ, unthunk(ż2)), b, z2)
+
+aₓₓ = (x, t)-> Zygote.forwarddiff(x->aₓ(x, t), x)
+
+∇u = gradient(θ) do
+       aₓₓ(x, t)
+       end

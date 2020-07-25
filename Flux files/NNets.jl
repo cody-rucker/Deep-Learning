@@ -1,21 +1,39 @@
-
-struct Layer
-    W
-    b
+mutable struct Affine
+  W
+  b
+  f
 end
 
-Layer(in::Integer, out::Integer) = Layer(randn(out, in), randn(out))
+Affine(in::Integer, out::Integer, f::Function=identity) = Affine(randn(out, in), randn(out), f)
 
-#(m::Layer)(x) = m.W * x .+ m.b
+mutable struct InputLayer
+    Wₓ
+    Wₜ
+    b
+    f
+end
 
-#a = Layer(10, 5)
+InputLayer(in::Integer, out::Integer, f::Function=identity) = InputLayer(randn(out, 1), randn(out, 1), randn(out), f)
 
-#a(rand(10)) # => 5-element vector
+(m::InputLayer)(x, t) =m.f( m.Wₓ*x .+ m.Wₜ*t .+ m.b)
 
-θ = Dict(:W1 => rand(5,2), :b1 => rand(5,1),
-         :W2 => rand(1,5), :b2 => rand(1,1))
-Layer(x, θ) = θ[:W] * x .+ θ[:b]
+(m::Affine)(x) = m.f(m.W*x .+ m.b)
 
-u(x, θ) =θ[:W2] * σ.(θ[:W1] *x .+ θ[:b1]) .+ θ[:b2]
+struct NeuralNet
+    layers
+    f
+end
 
-#u(x, θ) = layer(σ.(layer(x, θ[1])), θ[2])
+function NeuralNet(a::InputLayer, b::Affine...)
+    x = vcat(a, b[1])
+    for i = 2:length(b)
+        x = vcat(x, b[i])
+    end
+
+    f = b[1]∘a
+    for i = 2:length(b)
+        f = b[i]∘f
+    end
+        NeuralNet(x, f)
+end
+(m::NeuralNet)(x, t) = sum(m.f(x, t))
