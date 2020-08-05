@@ -1,10 +1,18 @@
 using Distributions
 using Plots
 
+#=
 mutable struct bdry
     θ::Float64
     ρ::Float64
 end
+=#
+
+mutable struct bdry
+    x::Float64
+    y::Float64
+end
+
 
 mutable struct Geometry
     r::Float64      # cavity radius
@@ -22,6 +30,48 @@ mutable struct Geometry
 
 end
 
+function Geometry(r::Float64, D::Float64, L::Float64, ξ::Float64 = 0.001)
+    ϕ = atan(D/L)
+    R = sqrt( L^2 + D^2)
+
+    # random point along cavity wall boundary
+    ρ, θ = (r, rand(π/2 : -ξ : -π/2))
+    cavity = bdry(ρ*cos(θ), ρ*sin(θ))
+
+    # random point along axis boundary
+    ρ, θ = (rand(r: ξ : D), rand((π/2, -π/2)))
+    axis = bdry(ρ*cos(θ), ρ*sin(θ))
+
+    # randome point along boundary at Earth's surface
+    top = bdry(rand(0 : ξ : L), D )
+
+    # random point along boundary at depth
+    bottom = bdry(rand(0 : ξ : L), -D)
+
+    # random point along remote boundary
+    remote = bdry(L, rand(-D : ξ : D ))
+
+    # random interior point
+    ρ, θ = (0.0, rand((π/2 : -ξ : -π/2)))
+    if -ϕ <= θ <= ϕ
+        μ = r
+        σ = 4.0
+        a = r
+        b = L / cos(θ)
+        ρ = rand( Truncated(Normal(μ, σ), a, b) )
+    else
+        μ = r
+        σ = 4.0
+        a = r
+        b = D / sin(abs(θ))
+        ρ = rand( Truncated(Normal(μ, σ), a, b) )
+    end
+    interior = bdry(ρ*cos(θ), ρ*sin(θ))
+
+    Geometry(r, D, L, ξ, ϕ, R, cavity, axis, top, bottom, remote, interior)
+end
+
+#= cylindrical "grid" generation
 
 function Geometry(r::Float64, D::Float64, L::Float64, ξ::Float64 = 0.001)
     ϕ = atan(D/L)
@@ -58,33 +108,33 @@ function Geometry(r::Float64, D::Float64, L::Float64, ξ::Float64 = 0.001)
 
     Geometry(r, D, L, ξ, ϕ, R, cavity, axis, top, bottom, remote, interior)
 end
-
+=#
 
 # visualize the scatter mesh
 #=
-p = scatter(proj=:polar, legend= :false, showaxis= :true,
+p = scatter(legend= :false, showaxis= :true,
             grid=:true, markercolor=:red4, markersize=0.5,
             alpha=1 , markershape = :circle, size=(1000,750))
-for i = 1:10000
-    v = Geometry(2.0, 10.0, 10.0)
+for i = 1:1000
+    v = Geometry(2.0, 10.0, 5.0)
 
-    x = [ v.cavity.θ,
-          v.axis.θ,
-          v.top.θ,
-          v.bottom.θ,
-          v.remote.θ,
-          v.interior.θ ]
+    x = [ v.cavity.x,
+          v.axis.x,
+          v.top.x,
+          v.bottom.x,
+          v.remote.x,
+          v.interior.x ]
 
-    y = [ v.cavity.ρ,
-          v.axis.ρ,
-          v.top.ρ,
-          v.bottom.ρ,
-          v.remote.ρ,
-          v.interior.ρ ]
+    y = [ v.cavity.y,
+          v.axis.y,
+          v.top.y,
+          v.bottom.y,
+          v.remote.y,
+          v.interior.y ]
 
-    scatter!(x, y, proj=:polar, legend= :false, showaxis= :true,
+    scatter!(x, y, legend= :false, showaxis= :true, xlims=(0, 10),
                    grid=:true, markercolor=:red4, markersize=0.5,
-                   alpha=1 , markershape = :circle, size=(1000,750))
+                   alpha=1 , markershape = :circle, size=(750,750))
 
 end
 

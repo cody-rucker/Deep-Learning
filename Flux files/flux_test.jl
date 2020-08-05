@@ -1,222 +1,143 @@
-# file for learning flux.jl
 using Flux
+using ForwardDiff
+using ProgressMeter
 using Plots
-using LinearAlgebra
-
-# grid for displaying functions
-z = 0:0.01:2
-
-#differentiating julia functions w.r.t a single variable
-#=
-f(x) = 3x^2 + 2x + 1
-df(x) = gradient(f, x)[1]
-d2f(x) = gradient(df, x)[1]
-
-plot()
-plot!(z, f)
-plot!(z, df)
-plot!(z, d2f)
-=#
-
-# if the function is multivariate, we can get the gradient w.r.t each
-# variable
-
-f(x, y) = sum((x .-y).^2)
-
-gradient(f, [2,1], [2,0])
-
-# when the function depends on many parameters we can use params
-
-x = [2, 1]
-y = [2, 0]
-
-gs = gradient(params(x,y)) do
-    f(x,y)
-end
-
-@show gs[x]
-
-@show gs[y]
-
-# Simple Models
-
-# "synaptic weights"
-W = rand(2,5)
-
-# bias
-b = rand(2)
-
-predict(x) = W*x + b
-
-function loss(x, y)
-    ŷ = predict(x)
-    sum((y .- ŷ).^2)
-end
-
-# dummy data
-x, y = rand(5), rand(2)
-@show loss(x, y)
-
-# to improve the prediction we can take gradients of loss w.r.t W and b
-# and perform gradient descent
-
-gs = gradient(() -> loss(x, y), params(W,b))
-
-# now that we have gradients we can pull them out and update W
-# to train the model
-Ŵ = gs[W]
-W .-= 0.1 .* Ŵ
-
-@show loss(x, y)
-
-# more complex models than the linear regression above
-
-W1 = rand(3, 5)
-b1 = rand(3)
-layer1(x) = W1 * x .+ b1
-
-W2 = rand(2,3)
-b2 = rand(2)
-layer2(x) = W2 * x.+ b2
-
-model(x) = layer2(σ.(layer1(x)))
-
-model(rand(5))
-
-# clean this up by introducing function to return linear layers
-function linear(in, out)
-    W = randn(out, in)
-    b = randn(out)
-    x -> W*x .+ b
-end
-
-linear1 = linear(5,3)
-linear2 = linear(3,2)
-
-model(x) = linear2(σ.(linear1(x)))
-
-# equivalently we can create a struct the explicitly represents
-# the affine layer
-
-struct Affine
-    W
-    b
-end
-
-Affine(in::Integer, out::Integer) =
-    Affine(randn(out, in), randn(out))
-
-# overload call, so the object can be used as a function
-(m::Affine)(x) = m.W * x .+ m.b
-
-a = Affine(10,5)
-a(rand(10))
-
-# above is the Dense layer that comes with flux
-
-# It is common to write models that look something like
-#   layer1 = Dense(10, 5, σ)
-#   ...
-#   model(x) = layer3(layer2(layer1(x)))
-#
-# so for long chains it is helpful to have lists of layers
-
-layers = [Dense(10, 5, σ), Dense(5, 2), softmax]
-model(x) = foldl((x, m) -> m(x), layers, init=x)
-model(rand(10))
-
-# this is also provided by flux
-model2 = Chain(
-    Dense(10, 5, σ),
-    Dense(5, 2),
-    softmax)
-
-model2(rand(10))
-
-# because models are viewed as fucntions here, we can view
-# this process as repeated function composition
-m = Dense(5, 2) ∘ Dense(10, 5, σ)
-m(rand(10))
-
-# and Chain will work with any julia function
-m = Chain(x -> x^2, x -> x+1)
-m(5) # → 26
+include("Adam_optimise.jl")
 
 
+M = 1000
+batch_size = 64
+# initial condition with exact solution u(x) = sin(2π(x-t))
+η(x) = sin(2π*x)
+γ(x) = -2π*cos(2π * x)
 
+# boundary condition at x = 1
+g₁(t) = sin(2π *(1 + t))
 
-# try training sine
+# exact solution
+uexact(x,t) = exp(-2*t)*sin.(pi*x)
 
-W = rand(2,1)
+# correction data
+F(x, t) = (π^2 - 2) * exp(-2*t) * sin(π*x)
 
-# bias
-b = rand(2)
+Wₓ = rand(5, 1)
+Wₜ = rand(5, 1)
+b1 = rand(5)
 
-predict(x) = W*x + b
+W2 = rand(5, 5)
+b2 = rand(5)
 
-g(x) = sin(x)
-
-function sin_loss(x)
-    ŷ = model(x)
-    sum((g.(x) .- ŷ).^2)
-end
-
-W1 = rand(15, 1)
-b1 = rand(15)
-layer1(x) = W1 * x .+ b1
-
-W2 = rand(10,15)
-b2 = rand(10)
-layer2(x) = W2 * x.+ b2
-
-W3 = rand(1,10)
+W3 = rand(1, 5)
 b3 = rand(1)
-layer3(x) = W3 * x.+ b3
 
-model(x) = layer3(σ.(layer2(σ.(layer1(x)))))
+θ = Flux.params(Wₓ, Wₜ, b1, W2, b2, W3, b3)
 
-for i = 1:100000
+# define a trainable neural network
+u(x, t) = sum(W3 * σ.(
+              W2 * σ.(
+              (Wₓ*x + Wₜ*t) .+ b1) .+ b2) .+ b3)
 
-#    if i%10000 == 0
-#        X = rand([-2*pi -pi 0 pi 2*pi])
-#    else
-        X = rand(0:0.001:2.5*pi, 1, 1)
-#    end
+# sigmoid derivative
+dσ(x) =  σ(x) * (1 - σ(x))
+d²σ(x) = dσ(x) - 2* dσ(x)*σ(x)
 
-    # to improve the prediction we can take gradients of loss w.r.t W and b
-    # and perform gradient descent
+# first-order derivatives
+uₓ(x, t) = sum(W3 * (dσ.(W2 * σ.( Wₓ*x .+ Wₜ*t .+ b1) .+ b2) .*
+                  (W2 * (dσ.( Wₓ*x .+ Wₜ*t .+ b1) .* Wₓ))))
 
-    gs = gradient(() -> sin_loss(X), params(W1,b1, W2, b2, W3, b3))
+uₜ(x, t) =sum( W3 * (dσ.(W2 * σ.( Wₓ*x .+ Wₜ*t .+ b1) .+ b2) .*
+                  (W2 * (dσ.( Wₓ*x .+ Wₜ*t .+ b1) .* Wₜ))))
 
-    # now that we have gradients we can pull them out and update W
-    # to train the model
-    Ŵ1 = gs[W1]
-    W1 .-= 0.1 .* Ŵ1
+# second-order derivatives
+#uₓₓ(x, t) = sum(W2 * (d²σ.(Wₓ*x .+ Wₜ*t .+ b1) .* Wₓ .* Wₓ))
+#uₜₜ(x, t) = sum(W2 * (d²σ.(Wₓ*x .+ Wₜ*t .+ b1) .* Wₜ .* Wₜ)) #slightly disagrees with autograd...
 
-    b̂1 = gs[b1]
-    b1[:] .-= 0.1 .* b̂1[:]
-
-
-    Ŵ2 = gs[W2]
-    W2 .-= 0.1 .* Ŵ2
-
-    b̂2 = gs[b2]
-    b2[:] .-= 0.1 .* b̂2[:]
-
-    Ŵ3 = gs[W3]
-    W3 .-= 0.1 .* Ŵ3
-
-    b̂3 = gs[b3]
-    b3[:] .-= 0.1 .* b̂3[:]
-    @show sin_loss(X)
+#=
+Define a physics informed neural net
+            f := uₜₜ + N[u]
+and proceed by approximating u(t,x) with a deep neural network
+=#
+function f(x, t)
+    return uₜ(x, t)- uₓ(x, t)
 end
 
-q = -10:0.01:10
-Q = zeros(length(q))
-for j = 1:length(q)
-    Q[j] = model(q[j])[1]
+function cost(x, t,  x̂, t̂, ẋ, ṫ, x₀, t₀, x₁, t₁)
+    sum(abs.(f(x,  t)).^2 +                     # enforce structure of the PDE
+        abs.(u(x̂,  t̂) .- η.(x̂)).^2 +            # initial displacement
+        abs.(u(x₁, t₁) .- g₁.(t₁)).^2   )       # b.c at x=1
 end
 
-plot(legend=false,size=(250,250))
-plot!(q,Q)
-plot!(q, g.(q[:]))
+# initialize Adam objects to store optimization parameters
+Wx = Adam(Wₓ, Wₓ)
+Wt = Adam(Wₜ, Wₜ)
+b₁ = Adam(b1, b1)
+
+W₂ = Adam(W2, W2)
+b₂ = Adam(b2, b2)
+
+W₃ = Adam(W3, W3)
+b₃ = Adam(b3, b3)
+
+
+# training loop: Adam optimisation
+@showprogress "Training..." for n = 1:M
+    sleep(0.1)
+    x = rand(0:0.001:1, 1, 1)[1]      # random (x,t)∈   Ω×[0,T]
+    t = rand(0:0.001:1, 1, 1)[1]
+    x̂ = rand(0:0.001:1, 1, 1)[1]      # random (x,t)∈   Ω×{0}
+    t̂ = 0.0
+    ẋ = rand(0:0.001:1, 1, 1)[1]      # random (x,t)∈   Ω×{0}
+    ṫ = 0.0
+    x₀ =0.0                           # random (x,t)∈ {0}×[0,T]
+    t₀ = rand(0:0.001:1.0, 1, 1)[1]
+    x₁ = 1.0                          # random (x,t)∈ {1}×[0,T]
+    t₁ = rand(0:0.001:1.0, 1, 1)[1]
+
+    for i = 1:batch_size
+
+        ∇u = gradient(θ) do
+            cost(x, t,  x̂, t̂, ẋ, ṫ, x₀, t₀, x₁, t₁)
+        end
+
+        # Adam optimisation
+        Adam_update!(Wₓ, Wx, ∇u[Wₓ], i)
+        Adam_update!(Wₜ, Wt, ∇u[Wₜ], i)
+        Adam_update!(b1, b₁, ∇u[b1], i)
+        Adam_update!(W2, W₂, ∇u[W2], i)
+        Adam_update!(b2, b₂, ∇u[b2], i)
+        Adam_update!(W3, W₃, ∇u[W3], i)
+        Adam_update!(b3, b₃, ∇u[b3], i)
+
+    # Stochastic gradient descent (SGD)
+    #    @inbounds for j = 1:length(θ)
+    #        θ[j] .-= α .* ∇u[θ[j]]
+    #    end
+    #    @show cost(x, t,  x̂, t̂, ẋ, ṫ, x₀, t₀, x₁, t₁)
+    end
+end
+
+v = 0:0.001:1
+xfine = 0:0.001:1
+Z = zeros(length(xfine), length(v))
+
+uexact(x, t) = sin(2*π*(x+t))
+err(x, t) = uexact.(x, t) - u(x, t)
+
+@inbounds for i = 1:length(v)
+    for j = 1:length(xfine)
+        Z[j,i] = u(xfine[j], v[i])
+    end
+end
+
+@inbounds for i = 1:2:length(v)
+    p1 = plot(xfine, u.(xfine[:], v[i]), size=(1000, 750), ylims=(-1.2, 1.2), lw=1.5,
+                            legend=:topright, label = "network")
+
+    plot!(xfine, uexact.(xfine[:], v[i]), label="exact")
+
+    p2 = plot(xfine, err.(xfine[:], v[i]), ylims = (-1.2, 1.2), label="error", color=:red)
+
+    p = plot(p1, p2, layout = (2,1), size=(1000, 750))
+
+    display(p)
+end
