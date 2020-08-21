@@ -58,13 +58,15 @@ function Geometry(r::Float64, D::Float64, L::Float64, ξ::Float64 = 0.001)
         σ = 4.0
         a = r
         b = L / cos(θ)
-        ρ = rand( Truncated(Normal(μ, σ), a, b) )
+        #ρ = rand( Truncated(Normal(μ, σ), a, b) )
+        ρ = rand( a:ξ: b )
     else
         μ = r
         σ = 4.0
         a = r
         b = D / sin(abs(θ))
-        ρ = rand( Truncated(Normal(μ, σ), a, b) )
+        #ρ = rand( Truncated(Normal(μ, σ), a, b) )
+        ρ = rand( a:ξ: b )
     end
     interior = bdry(ρ*cos(θ), ρ*sin(θ))
 
@@ -140,3 +142,28 @@ end
 
 #display(p)
 =#
+
+# plotting on geometry
+uexact(x, y) = sin(π*x) * sin(π*y)
+
+a = 1.5
+L = 5.0
+D = 5.0
+w = true
+x_grid = 0:0.05:L
+y_grid = -D:0.1:D
+
+Z = zeros(length(x_grid), length(y_grid))
+
+for i = 1:length(x_grid)
+    for j = 1:length(y_grid)
+        if (sqrt(x_grid[i]^2 + y_grid[j]^2) < a)
+            Z[i, j] = 0
+        else
+            Z[i, j] = uexact(x_grid[i], y_grid[j])
+        end
+    end
+end
+
+pyplot()
+plot(x_grid, y_grid, Z[:,:], st=:contour)

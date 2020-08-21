@@ -2,8 +2,8 @@ using Flux
 using ForwardDiff
 using ProgressMeter
 using Plots
-include("Adam_optimise.jl")
-
+include("Adam_optimize.jl")
+include("NNets.jl")
 
 M = 1000
 batch_size = 32
@@ -16,13 +16,14 @@ x₁(t) = sin(π*t)
 y₀(x) = sin(π*x)
 y₁(x) = sin(π*x)
 # exact solution
-uexact(x,t) = sin(π * x) + sin(π * t)
+#uexact(x,t) = sin(π * x) + sin(π * t)
+uexact(x, y) = exp(-x)
 
 # correction data to satisfy uₜ - uₓₓ
-F(x, t) = π^2 * ( sin(π*x) + sin(π * t))
-
+#F(x, t) = π^2 * ( sin(π*x) + sin(π * t))
+F(x, y) = exp(-x)
 ######################################################
-
+#=
 Wₓ = rand(20, 1)
 Wₜ = rand(20, 1)
 b1 = rand(20)
@@ -34,12 +35,22 @@ W3 = rand(1, 25)
 b3 = rand(1)
 
 θ = Flux.params(Wₓ, Wₜ, b1, W2, b2, W3, b3)
-
+=#
 # define a trainable neural net
-u(x, t) = sum(W3 * σ.(
-              W2 * σ.(
-              (Wₓ*x + Wₜ*t) .+ b1) .+ b2) .+ b3)
+#u(x, t) = sum(W3 * σ.(
+#              W2 * σ.(
+#              (Wₓ*x + Wₜ*t) .+ b1) .+ b2) .+ b3)
+u = NeuralNet2(20,1)
 
+Wₓ = u.Wₓ
+Wₜ = u.Wᵧ
+b1 = u.b₁
+
+W2 = u.W₂
+b2 = u.b₂
+
+W3 = u.W₃
+b3 = u.b₃
 # sigmoid derivative
 dσ(x) =  σ(x) * (1 - σ(x))
 d²σ(x) = dσ(x) - 2* dσ(x)*σ(x)
@@ -78,9 +89,9 @@ t = 3.5
 ux = (x, t) -> ForwardDiff.derivative(x -> u(x, t), x)
 ut = (x, t) -> ForwardDiff.derivative(t -> u(x, t), t)
 
-@assert uₓ(x, t) ≈ ux(x, t)
-@assert uₜ(x, t) ≈ ut(x, t)
-@assert uₓₓ(x, t) ≈ ForwardDiff.derivative(x -> ux(x, t), x)
+#@assert uₓ(x, t) ≈ ux(x, t)
+#@assert uₜ(x, t) ≈ ut(x, t)
+#@assert uₓₓ(x, t) ≈ ForwardDiff.derivative(x -> ux(x, t), x)
 #@assert uₜₜ(x, t) ≈ ForwardDiff.derivative(t -> ut(x, t), t)
 
 #=
@@ -90,14 +101,15 @@ and proceed by approximating u(t,x) with a deep neural network
 =#
 function f(x, t)
     return -uₜₜ(x, t)- uₓₓ(x, t)
+    #return -u.D²x(x, t) .- u.D²y(x, t)
 end
 
 # cost function to be minimized during gradient descent
 function cost(x, t,  x̂, t̂, ẋ, ṫ, x̄₀, t̄₀, x̄₁, t̄₁)
-    sum(abs.(f(x,  t) .- F(x, t)).^2 +                  # enforce structure of the PDE
-        abs.(u(x̂,  t̂) .- y₀.(x̂)).^2 +                   # b.c at y=0
-        abs.(u(ẋ, ṫ) .- y₁.(ẋ)).^2 +                   # b.c at y=1
-        abs.(u(x̄₀, t̄₀) .- x₀.(t̄₀)).^2 +                 # b.c at x=0
+    sum(abs.(f(x,  t) .- F(x, t)).^2 .+                  # enforce structure of the PDE
+        abs.(u(x̂,  t̂) .- y₀.(x̂)).^2 .+                   # b.c at y=0
+        abs.(u(ẋ, ṫ) .- y₁.(ẋ)).^2 .+                   # b.c at y=1
+        abs.(u(x̄₀, t̄₀) .- x₀.(t̄₀)).^2 .+                 # b.c at x=0
         abs.(u(x̄₁, t̄₁) .- x₁.(t̄₁)).^2   )               # b.c at x=1
 end
 
@@ -114,11 +126,12 @@ b₃ = Adam(b3, b3)
 
 
 # training loop: Adam optimization
-@showprogress "Training..." for n = 1:M
+#@showprogress "Training..."
+for n = 1:M
     sleep(0.1)
     for i = 1:batch_size
 
-        x = rand(0:0.001:1, 1, 1)[1]              # random x∈   Ω×[0,T]
+        x = rand(0:0.001:1.0, 1, 1)[1]              # random x∈   Ω×[0,T]
         t = rand(0:0.001:1, 1, 1)[1]
         x̂ = rand(0:0.001:1, 1, 1)[1]      # random x∈   Ω×{0}
         t̂ = 0.0
@@ -129,11 +142,12 @@ b₃ = Adam(b3, b3)
         x̄₁ = 1.0                         # random x∈ {1}×[0,T]
         t̄₁ = rand(0:0.001:1.0, 1, 1)[1]
 
-        ∇u = gradient(θ) do
+        ∇u = gradient(u.θ) do
             cost(x, t,  x̂, t̂, ẋ, ṫ, x̄₀, t̄₀, x̄₁, t̄₁)
         end
 
         # Adam optimisation
+
         Adam_update!(Wₓ, Wx, ∇u[Wₓ], i)
         Adam_update!(Wₜ, Wt, ∇u[Wₜ], i)
         Adam_update!(b1, b₁, ∇u[b1], i)
@@ -148,7 +162,7 @@ b₃ = Adam(b3, b3)
     #    @inbounds for j = 1:length(θ)
     #        θ[j] .-= α .* ∇u[θ[j]]
     #    end
-    #    @show cost(x, t,  x̂, t̂, ẋ, ṫ, x₀, t₀, x₁, t₁)
+        @show cost(x, t,  x̂, t̂, ẋ, ṫ, x̄₀, t̄₀, x̄₁, t̄₁)
     end
 end
 

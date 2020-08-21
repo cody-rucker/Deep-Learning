@@ -2,10 +2,10 @@ using Flux
 
 
 mutable struct Adam
-  θ::AbstractArray{Float32}     # Parameter array
-  ∇::AbstractArray{Float32}     # Gradient w.r.t θ
-  m::AbstractArray{Float32}     # First moment
-  v::AbstractArray{Float32}     # Second moment
+  θ::AbstractArray     # Parameter array
+  ∇::AbstractArray     # Gradient w.r.t θ
+  m::AbstractArray     # First moment
+  v::AbstractArray     # Second moment
   β₁::Float64                   # Exp. decay first moment
   β₂::Float64                   # Exp. decay second moment
   α::Float64                    # Step size
@@ -35,7 +35,8 @@ end
 
 function Adam_update!(θ::AbstractArray{Float64}, W̄::Adam, ∇θ::AbstractArray{Float64}, t::Int64)
     # initialize parameter array along with 1st and second moments
-    W̄.∇ = ∇θ
+    #θ = Flux.data(θ)
+    W̄.∇ = ∇θ #Flux.data(∇θ)
 
     W̄.m = W̄.β₁ * W̄.m + (1 - W̄.β₁) .* W̄.∇
     W̄.v = W̄.β₂ * W̄.v + (1 - W̄.β₂) .* (W̄.∇).^2

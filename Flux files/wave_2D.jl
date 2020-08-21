@@ -2,7 +2,7 @@ using Flux
 using ForwardDiff
 using ProgressMeter
 using Plots
-include("Adam_optimise.jl")
+include("Adam_optimize.jl")
 
 
 M = 2500
@@ -140,7 +140,7 @@ W₃ = Adam(W3, W3)
 b₃ = Adam(b3, b3)
 
 # training loop: Adam optimisation
-@showprogress "Training..." @inbounds for n = 1:M
+@showprogress "Training..." for n = 1:M
     sleep(0.1)
     @inbounds for i = 1:batch_size
 

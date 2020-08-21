@@ -8,16 +8,16 @@ include("Adam_optimize.jl")
 
 # solve the axisymmetric magma cavity problem in an elastic half-space
 
-a = 0.25         # cavity radius
-D = 1.0        # cavity depth
-L = 1.0        # distance from remote boundary to radial center
+a = 2.0         # cavity radius
+D = 5.0        # cavity depth
+L = 5.0        # distance from remote boundary to radial center
 ξ = 0.01        # resolution for randomly selected points
 μ = 0.25        # μ, λ are lamé parameters
 λ = 1.0
 
-P = 10.0        # pressure along cavity wall
+P = 1.0        # pressure along cavity wall
 
-num_iters = 20
+num_iters = 1000
 batch_size = 32
 
 r = 1.0
@@ -36,6 +36,7 @@ z = 1.0
 ûr(r, z) = P * a * r / 4 * μ * ( r^2 + z^2)^(3/2)
 ûz(r, z) = P * a * z / 4 * μ * ( r^2 + z^2)^(3/2)
 
+û(r, z) = (P * a)  / (4 * μ * ( r^2 + z^2)^(3/2)) .* [r; z]
 """
 struct Affine
   W
@@ -66,6 +67,106 @@ q2 = Affine(20, 1)
 θ = Flux.params(p1.Wₓ, p1.Wᵧ, p1.b, p2.W, p2.b,
                 q1.Wₓ, q1.Wᵧ, q1.b, q2.W, q2.b)
 """
+
+Wᵣ = rand(30,1)
+W𝑧 = rand(30,1)
+b1 = rand(30)
+
+W2 = rand(2,30)
+b2 = rand(2)
+
+eᵣ = [1.0; 0.0]
+e𝑧 = [0.0; 1.0]
+
+θ = Flux.params(Wᵣ, W𝑧, b1, W2, b2)
+
+r = 1.5
+z = 2.1
+
+u_r(r, z) = sum((W2 * σ.(Wᵣ*r + W𝑧*z .+ b1) .+ b2) .* eᵣ)
+u_z(r, z) = sum((W2 * σ.(Wᵣ*r + W𝑧*z .+ b1) .+ b2) .* e𝑧)
+u(r, z) = (W2 * σ.(Wᵣ*r + W𝑧*z .+ b1) .+ b2)
+# ∂ᵣu_r and ∂ᵣu_z
+∂ᵣu(r, z) = W2 * (σ'.(Wᵣ*r + W𝑧*z .+ b1) .* Wᵣ )
+
+@assert ∂ᵣu(r, z)[1] ≈ ForwardDiff.derivative(r->u_r(r, z), r)
+@assert ∂ᵣu(r, z)[2] ≈ ForwardDiff.derivative(r->u_z(r, z), r)
+
+#∂𝑧u_r and ∂𝑧u_z
+∂𝑧u(r, z) = W2 * (σ'.(Wᵣ*r + W𝑧*z .+ b1) .* W𝑧 )
+
+@assert ∂𝑧u(r, z)[1] ≈ ForwardDiff.derivative(z->u_r(r, z), z)
+@assert ∂𝑧u(r, z)[2] ≈ ForwardDiff.derivative(z->u_z(r, z), z)
+
+# second-order derivatives
+#∂ᵣᵣu_r and ∂ᵣᵣu_z
+∂ᵣᵣu(r, z) = W2 * ( σ''.(Wᵣ*r + W𝑧*z .+ b1) .* Wᵣ .* Wᵣ)
+
+@assert ∂ᵣᵣu(r, z)[1] ≈ ForwardDiff.derivative(r-> ForwardDiff.derivative(r-> u_r(r, z), r), r)
+@assert ∂ᵣᵣu(r, z)[2] ≈ ForwardDiff.derivative(r-> ForwardDiff.derivative(r-> u_z(r, z), r), r)
+
+#∂𝑧𝑧u_r and ∂𝑧𝑧u_z
+∂𝑧𝑧u(r, z) = W2 * ( σ''.(Wᵣ*r + W𝑧*z .+ b1) .* W𝑧 .* W𝑧)
+
+@assert ∂𝑧𝑧u(r, z)[1] ≈ ForwardDiff.derivative(z-> ForwardDiff.derivative(z-> u_r(r, z), z), z)
+@assert ∂𝑧𝑧u(r, z)[2] ≈ ForwardDiff.derivative(z-> ForwardDiff.derivative(z-> u_z(r, z), z), z)
+
+∂ᵣ𝑧u(r,z) = W2 * ( σ''.(Wᵣ*r + W𝑧*z .+ b1) .* Wᵣ .* W𝑧)
+
+@assert ∂ᵣ𝑧u(r, z)[1] ≈ ForwardDiff.derivative(r-> ∂𝑧u(r, z)[1], r)
+@assert ∂ᵣ𝑧u(r, z)[2] ≈ ForwardDiff.derivative(r-> ∂𝑧u(r, z)[2], r)
+
+# stress σ = Eε
+function div_σ(r, z)
+    # divergence is still probably wrong
+    (∂ᵣᵣu(r, z) + ∂ᵣu(r, z)) .* [2μ + λ; μ] + ∂ᵣ𝑧u(r,z) .* (μ + λ) + ∂𝑧𝑧u(r, z) .* [μ ; 2μ + λ]
+                -((2μ + λ)/r^2 * u(r,z) .* [1; 0]) + ((μ + λ)/r * ∂𝑧u(r, z) .* [1; 0] )
+end
+
+# define objective function J(r, z) accounting for boudary points
+function J(mesh::Geometry)
+    sum( div_σ(mesh.interior.x, mesh.interior.y).^2 +
+    abs.(u(mesh.cavity.x, mesh.cavity.y) - û(mesh.cavity.x, mesh.cavity.y)).^2 +
+    abs.(u(mesh.axis.x, mesh.axis.y) - û(mesh.axis.x, mesh.axis.y)).^2 +
+    abs.(u(mesh.top.x, mesh.top.y) - û(mesh.top.x, mesh.top.y)).^2 +
+    abs.(u(mesh.bottom.x, mesh.bottom.y) - û(mesh.bottom.x, mesh.bottom.y)).^2 +
+    abs.(u(mesh.remote.x, mesh.remote.y) - û(mesh.remote.x, mesh.remote.y)).^2)
+end
+
+# initialize Adam objects to store optimization parameters
+Wr = Adam(Wᵣ, Wᵣ)
+Wz = Adam(W𝑧, W𝑧)
+b₁ = Adam(b1, b1)
+W₂ = Adam(W2, W2)
+b₂ = Adam(b2, b2)
+
+
+#@showprogress "Training..."
+for i = 1:num_iters
+
+
+    for j = 1:batch_size
+          # generate random points on domain boundary and interior
+          mesh = Geometry(a, D, L, ξ)
+
+          ∇u = gradient(θ) do
+              J(mesh)
+          end
+
+          # Adam optimisation
+          Adam_update!( Wᵣ, Wr, ∇u[Wᵣ], i)
+          Adam_update!( W𝑧, Wz, ∇u[W𝑧], i)
+          Adam_update!( b1, b₁, ∇u[b1], i)
+          Adam_update!( W2, W₂, ∇u[W2], i)
+          Adam_update!( b2, b₂, ∇u[b2], i)
+
+         @show J(mesh)
+    end
+
+end
+
+
+#=
 Wr_r = rand(30, 1)
 Wr_z = rand(30, 1)
 br1 = rand(30)
@@ -191,4 +292,5 @@ end
 writedlm("NN_weights/Wx.csv", Wₓ, ',')
 writedlm("NN_weights/Wy.csv", Wᵧ, ',')
 writedlm("NN_weights/.csv", A, ',')
+=#
 =#

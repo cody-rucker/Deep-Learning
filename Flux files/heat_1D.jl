@@ -2,10 +2,10 @@ using Flux
 using ForwardDiff
 using ProgressMeter
 using Plots
-include("Adam_optimise.jl")
+include("Adam_optimize.jl")
 
 
-M = 1000
+M = 1200
 batch_size = 32
 
 # initial conditions on displacement(η) and velocity (γ)
@@ -24,14 +24,14 @@ F(x, t) = (π^2 - 2) * exp(-2*t) * sin(π*x)
 
 ######################################################
 
-Wₓ = rand(30, 1)
-Wₜ = rand(30, 1)
-b1 = rand(30)
+Wₓ = rand(20, 1)
+Wₜ = rand(20, 1)
+b1 = rand(20)
 
-W2 = rand(40, 30)
-b2 = rand(40)
+W2 = rand(20, 20)
+b2 = rand(20)
 
-W3 = rand(1, 40)
+W3 = rand(1, 20)
 b3 = rand(1)
 
 θ = Flux.params(Wₓ, Wₜ, b1, W2, b2, W3, b3)
@@ -139,7 +139,7 @@ b₃ = Adam(b3, b3)
         x₁ = 1.0                         # random x∈ {1}×[0,T]
         t₁ = rand(0:0.001:1.0, 1, 1)[1]
 
-        ∇u = gradient(θ) do
+        ∇u = Flux.gradient(θ) do
             cost(x, t,  x̂, t̂, ẋ, ṫ, x₀, t₀, x₁, t₁)
         end
 
@@ -175,7 +175,7 @@ err(x, t) = uexact.(x, t) - u(x, t)# θ)
         Z[j,i] = u(xfine[j], v[i])
     end
 end
-#=
+
 @inbounds for i = 1:2:length(v)
     p1 = plot(xfine, u.(xfine[:], v[i]), size=(1000, 750), ylims=(0, 1.0), lw=1.5,
                             legend=:topright, label = "network")
@@ -189,4 +189,3 @@ end
     #plot!(xfine, uexact.(xfine[:] .+ c*t[i]), label="exact")
     display(p)
 end
-=#
