@@ -19,16 +19,6 @@ g₀(t) = exp(-t^2)
 # initialize trainable neural net
 u = NeuralNet2(N, 1)
 
-Wₓ = u.Wₓ.θ
-Wₜ = u.Wᵧ.θ
-b1 = u.b₁.θ
-
-W2 = u.W₂.θ
-b2 = u.b₂.θ
-
-W3 = u.W₃.θ
-b3 = u.b₃.θ
-
 uₓ = FirstNetDerivative(u, "x")
 uₜ = FirstNetDerivative(u, "y")
 
