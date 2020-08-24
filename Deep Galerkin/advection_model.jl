@@ -4,7 +4,7 @@ using ProgressMeter
 using Plots
 include("NNets.jl")
 
-M = 64000   # training iterations
+M = 32000   # training iterations
 N = 10      # number of hidden neurons
 
 # exact solution
@@ -17,10 +17,10 @@ uexact(x,t) = exp(-(x-t)^2)
 g₀(t) = exp(-t^2)
 
 # initialize trainable neural net
-u = NeuralNet2(N, 1)
+u = NeuralNet(N, 1, 2)
 
-uₓ = FirstNetDerivative(u, "x")
-uₜ = FirstNetDerivative(u, "y")
+uₓ = FirstNetDerivative(u, "x₁")
+uₜ = FirstNetDerivative(u, "x₂")
 
 # function for constraining differential condition
 function f(x, t)
