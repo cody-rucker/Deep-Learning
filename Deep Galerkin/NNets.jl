@@ -72,7 +72,7 @@ julia> u(1.0, 2.0)
 mutable struct NeuralNet
     Wₓ::Adam
     Wᵧ::Adam
-    Wₜ::Adam
+    W𝑧::Adam
     b₁::Adam
     W₂::Adam
     b₂::Adam
@@ -93,24 +93,24 @@ mutable struct NeuralNet
 
         if spatial_dim == 1
             wᵧ = Adam(1,1)
-            Wₜ = Adam(1,1)
+            W𝑧 = Adam(1,1)
             Π = (Wₓ, b₁, W₂, b₂, W₃, b₃)
             π = Flux.params(Wₓ.θ, b₁.θ, W₂.θ, b₂.θ, W₃.θ, b₃.θ)
 
         elseif spatial_dim ==2
             Wᵧ = Adam(hidden_dims, 1)
-            Wₜ = Adam(1,1)
+            W𝑧 = Adam(1,1)
             Π = (Wₓ, Wᵧ, b₁, W₂, b₂, W₃, b₃)
             π = Flux.params(Wₓ.θ, Wᵧ.θ, b₁.θ, W₂.θ, b₂.θ, W₃.θ, b₃.θ)
 
         elseif spatial_dim == 3
             Wᵧ = Adam(hidden_dims, 1)
-            Wₜ = Adam(hidden_dims, 1)
-            Π = (Wₓ, Wᵧ, Wₜ, b₁, W₂, b₂, W₃, b₃)
-            π = Flux.params(Wₓ.θ, Wᵧ.θ, Wₜ.θ, b₁.θ, W₂.θ, b₂.θ, W₃.θ, b₃.θ)
+            W𝑧 = Adam(hidden_dims, 1)
+            Π = (Wₓ, Wᵧ, W𝑧, b₁, W₂, b₂, W₃, b₃)
+            π = Flux.params(Wₓ.θ, Wᵧ.θ, W𝑧.θ, b₁.θ, W₂.θ, b₂.θ, W₃.θ, b₃.θ)
         end
 
-        new(Wₓ, Wᵧ, Wₜ, b₁, W₂, b₂, W₃, b₃, Π, π);
+        new(Wₓ, Wᵧ, W𝑧, b₁, W₂, b₂, W₃, b₃, Π, π);
     end
 end
 
@@ -125,7 +125,7 @@ end
 
 (u::NeuralNet)(x, y, t) = u.W₃.θ * σ.(
                         u.W₂.θ * σ.(
-                        u.Wₓ.θ*x + u.Wᵧ.θ*y + u.Wₜ.θ*t .+ u.b₁.θ) .+ u.b₂.θ) .+ u.b₃.θ ;
+                        u.Wₓ.θ*x + u.Wᵧ.θ*y + u.W𝑧.θ*t .+ u.b₁.θ) .+ u.b₂.θ) .+ u.b₃.θ ;
 
 """
 
@@ -150,7 +150,7 @@ julia> uₓ(1.0, 2.0)
 mutable struct FirstNetDerivative
     Wₓ::Adam
     Wᵧ::Adam
-    Wₜ::Adam
+    W𝑧::Adam
     b₁::Adam
     W₂::Adam
     b₂::Adam
@@ -162,7 +162,7 @@ mutable struct FirstNetDerivative
     function FirstNetDerivative(u::NeuralNet, d)
         Wₓ = u.Wₓ
         Wᵧ = u.Wᵧ
-        Wₜ = u.Wₜ
+        W𝑧 = u.W𝑧
         b₁ = u.b₁
         W₂ = u.W₂
         b₂ = u.b₂
@@ -176,12 +176,12 @@ mutable struct FirstNetDerivative
             dξ = Wᵧ.θ
 
         elseif d == "x₃"
-            dξ = Wₜ.θ
+            dξ = W𝑧.θ
         else
             print("Must specify x₁. x₂, or x₃ as a string literal argument.")
         end
 
-        new(Wₓ, Wᵧ, Wₜ, b₁, W₂, b₂, W₃, b₃, dξ)
+        new(Wₓ, Wᵧ, W𝑧, b₁, W₂, b₂, W₃, b₃, dξ)
     end
 
 
@@ -194,8 +194,8 @@ end
 (u::FirstNetDerivative)(x, y) = u.W₃.θ * (σ'.(u.W₂.θ * σ.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.b₁.θ) .+ u.b₂.θ) .*
                   (u.W₂.θ * (σ'.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.b₁.θ) .* u.dξ )))
 
-(u::FirstNetDerivative)(x, y, t) = u.W₃.θ * (σ'.(u.W₂.θ * σ.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y  .+ u.Wₜ.θ*t .+ u.b₁.θ) .+ u.b₂.θ) .*
-                (u.W₂.θ * (σ'.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.Wₜ.θ*t .+ u.b₁.θ) .* u.dξ )))
+(u::FirstNetDerivative)(x, y, t) = u.W₃.θ * (σ'.(u.W₂.θ * σ.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y  .+ u.W𝑧.θ*t .+ u.b₁.θ) .+ u.b₂.θ) .*
+                (u.W₂.θ * (σ'.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.W𝑧.θ*t .+ u.b₁.θ) .* u.dξ )))
 
 
 """
@@ -223,7 +223,7 @@ julia> uₓᵧ(1.0, 2.0)
 mutable struct SecondNetDerivative
   Wₓ::Adam
   Wᵧ::Adam
-  Wₜ::Adam
+  W𝑧::Adam
   b₁::Adam
   W₂::Adam
   b₂::Adam
@@ -236,7 +236,7 @@ mutable struct SecondNetDerivative
   function SecondNetDerivative(u::NeuralNet, d₁, d₂)
     Wₓ = u.Wₓ
     Wᵧ = u.Wᵧ
-    Wₜ = u.Wₜ
+    W𝑧 = u.W𝑧
     b₁ = u.b₁
     W₂ = u.W₂
     b₂ = u.b₂
@@ -249,7 +249,7 @@ mutable struct SecondNetDerivative
     elseif d₁ == "x₂"
         dξ = Wᵧ.θ
     elseif d₁ == "x₃"
-        dξ = Wₜ.θ
+        dξ = W𝑧.θ
     else
         print("Must specify x or y as a string literal argument.")
     end
@@ -260,12 +260,12 @@ mutable struct SecondNetDerivative
     elseif d₂ == "x₂"
         dζ = Wᵧ.θ
     elseif d₂ == "x₃"
-        dζ = Wₜ.θ
+        dζ = W𝑧.θ
     else
         print("Must specify x or y as a string literal argument.")
     end
 
-    new(Wₓ, Wᵧ, Wₜ, b₁, W₂, b₂, W₃, b₃, dξ, dζ)
+    new(Wₓ, Wᵧ, W𝑧, b₁, W₂, b₂, W₃, b₃, dξ, dζ)
   end
 end
 
@@ -290,8 +290,8 @@ function (u::SecondNetDerivative)(x, y)
     return u.W₃.θ * (a .+ b)
 end
 
-function (u::SecondNetDerivative)(x, y, t)
-    Σ = u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.Wₜ.θ*t .+ u.b₁.θ
+function (u::SecondNetDerivative)(x, y, z)
+    Σ = u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.W𝑧.θ*z .+ u.b₁.θ
 
     a = σ''.(u.W₂.θ * σ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (σ'.(Σ) .* u.dζ)) .* (u.W₂.θ * (σ'.(Σ) .* u.dξ))
 
