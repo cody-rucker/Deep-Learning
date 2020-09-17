@@ -2,10 +2,11 @@ using Flux
 using ForwardDiff
 using ProgressMeter
 using Plots
+using DelimitedFiles
 include("NNets.jl")
 
 M = 32000   # training iterations
-N = 10      # number of hidden neurons
+N = 7      # number of hidden neurons
 
 # exact solution
 uexact(x,t) = exp(-(x-t)^2)
@@ -53,6 +54,7 @@ end
     Adam_update(u, ∇u)
 end
 
+write_params(u)
 
 v = 0:0.005:3
 xfine = 0:0.01:2

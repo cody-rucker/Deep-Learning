@@ -322,3 +322,15 @@ function Adam_update(u::NeuralNet, ∇u)
         Adam_step(p, ∇u[p.θ])
     end
 end
+
+
+function write_params(u)
+    writedlm("NN_params/Wx.csv", u.Wₓ.θ, ',')
+    writedlm("NN_params/Wy.csv", u.Wᵧ.θ, ',')
+    writedlm("NN_params/Wz.csv", u.W𝑧.θ, ',')
+    writedlm("NN_params/b1.csv", u.b₁.θ, ',')
+    writedlm("NN_params/W2.csv", u.W₂.θ, ',')
+    writedlm("NN_params/b2.csv", u.b₂.θ, ',')
+    writedlm("NN_params/W3.csv", u.W₃.θ, ',')
+    writedlm("NN_params/b3.csv", u.b₃.θ, ',')
+end
