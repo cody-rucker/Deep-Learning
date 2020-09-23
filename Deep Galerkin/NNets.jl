@@ -2,6 +2,33 @@ using Flux
 using ForwardDiff
 using Zygote
 
+# ReLu activation for rectified linear units
+#   relu(x) = max(0, x)
+#   relu'(x) = 0    x<0
+#              1    x≧0
+ρ(x) = max(0, x)
+
+function dρ(x)
+    if x < 0
+        return 0
+    else
+        return x^2
+    end
+end
+
+function ddρ(x)
+    if x<0
+        return 0
+    else
+        return 2*x
+    end
+end
+# symbol for quick swapping of activation functions
+φ = σ
+dφ = σ'
+ddφ = σ''
+
+
 # create type to hold adaptive moment estimation parameters
 """
     Adam(N, M)
@@ -35,9 +62,9 @@ mutable struct Adam
       ∇ = rand(N, M)
       m = zeros(size(θ))
       v = zeros(size(θ))
-      β₁= 0.9
-      β₂= 0.999
-      α = 0.01
+      β₁= 0.91
+      β₂= 0.9991
+      α = 0.0089
       ϵ = 1e-8
       t = 0
     new(θ, ∇, m, v, β₁, β₂, α, ϵ, t)
@@ -115,16 +142,16 @@ mutable struct NeuralNet
 end
 
 # define a forward-pass rule for each different input size
-(u::NeuralNet)(x) = u.W₃.θ * σ.(
-                     u.W₂.θ * σ.(
+(u::NeuralNet)(x) = u.W₃.θ * φ.(
+                     u.W₂.θ * φ.(
                      u.Wₓ.θ*x .+ u.b₁.θ) .+ u.b₂.θ) .+ u.b₃.θ
 
-(u::NeuralNet)(x, y) = u.W₃.θ * σ.(
-                        u.W₂.θ * σ.(
+(u::NeuralNet)(x, y) = u.W₃.θ * φ.(
+                        u.W₂.θ * φ.(
                         u.Wₓ.θ*x + u.Wᵧ.θ*y .+ u.b₁.θ) .+ u.b₂.θ) .+ u.b₃.θ ;
 
-(u::NeuralNet)(x, y, t) = u.W₃.θ * σ.(
-                        u.W₂.θ * σ.(
+(u::NeuralNet)(x, y, t) = u.W₃.θ * φ.(
+                        u.W₂.θ * φ.(
                         u.Wₓ.θ*x + u.Wᵧ.θ*y + u.W𝑧.θ*t .+ u.b₁.θ) .+ u.b₂.θ) .+ u.b₃.θ ;
 
 """
@@ -188,14 +215,14 @@ mutable struct FirstNetDerivative
 end
 
 # supply a derivative computation for each input size
-(u::FirstNetDerivative)(x) = u.W₃.θ * (σ'.(u.W₂.θ * σ.( u.Wₓ.θ*x .+ u.b₁.θ) .+ u.b₂.θ) .*
-                  (u.W₂.θ * (σ'.( u.Wₓ.θ*x .+ u.b₁.θ) .* u.dξ )))
+(u::FirstNetDerivative)(x) = u.W₃.θ * (dφ.(u.W₂.θ * φ.( u.Wₓ.θ*x .+ u.b₁.θ) .+ u.b₂.θ) .*
+                  (u.W₂.θ * (dφ.( u.Wₓ.θ*x .+ u.b₁.θ) .* u.dξ )))
 
-(u::FirstNetDerivative)(x, y) = u.W₃.θ * (σ'.(u.W₂.θ * σ.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.b₁.θ) .+ u.b₂.θ) .*
-                  (u.W₂.θ * (σ'.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.b₁.θ) .* u.dξ )))
+(u::FirstNetDerivative)(x, y) = u.W₃.θ * (dφ.(u.W₂.θ * φ.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.b₁.θ) .+ u.b₂.θ) .*
+                  (u.W₂.θ * (dφ.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.b₁.θ) .* u.dξ )))
 
-(u::FirstNetDerivative)(x, y, t) = u.W₃.θ * (σ'.(u.W₂.θ * σ.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y  .+ u.W𝑧.θ*t .+ u.b₁.θ) .+ u.b₂.θ) .*
-                (u.W₂.θ * (σ'.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.W𝑧.θ*t .+ u.b₁.θ) .* u.dξ )))
+(u::FirstNetDerivative)(x, y, t) = u.W₃.θ * (dφ.(u.W₂.θ * φ.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y  .+ u.W𝑧.θ*t .+ u.b₁.θ) .+ u.b₂.θ) .*
+                (u.W₂.θ * (dφ.( u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.W𝑧.θ*t .+ u.b₁.θ) .* u.dξ )))
 
 
 """
@@ -273,9 +300,9 @@ end
 function (u::SecondNetDerivative)(x)
     Σ = u.Wₓ.θ*x .+ u.b₁.θ
 
-    a = σ''.(u.W₂.θ * σ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (σ'.(Σ) .* u.dζ)) .* (u.W₂.θ * (σ'.(Σ) .* u.dξ))
+    a = ddφ.(u.W₂.θ * φ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (dφ.(Σ) .* u.dζ)) .* (u.W₂.θ * (dφ.(Σ) .* u.dξ))
 
-    b = σ'.( u.W₂.θ * σ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (σ''.(Σ) .* u.dξ .* u.dζ) )
+    b = dφ.( u.W₂.θ * φ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (ddφ.(Σ) .* u.dξ .* u.dζ) )
 
     return u.W₃.θ * (a .+ b)
 end
@@ -283,9 +310,9 @@ end
 function (u::SecondNetDerivative)(x, y)
     Σ = u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.b₁.θ
 
-    a = σ''.(u.W₂.θ * σ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (σ'.(Σ) .* u.dζ)) .* (u.W₂.θ * (σ'.(Σ) .* u.dξ))
+    a = ddφ.(u.W₂.θ * φ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (dφ.(Σ) .* u.dζ)) .* (u.W₂.θ * (dφ.(Σ) .* u.dξ))
 
-    b = σ'.( u.W₂.θ * σ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (σ''.(Σ) .* u.dξ .* u.dζ) )
+    b = dφ.( u.W₂.θ * φ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (ddφ.(Σ) .* u.dξ .* u.dζ) )
 
     return u.W₃.θ * (a .+ b)
 end
@@ -293,9 +320,9 @@ end
 function (u::SecondNetDerivative)(x, y, z)
     Σ = u.Wₓ.θ*x .+ u.Wᵧ.θ*y .+ u.W𝑧.θ*z .+ u.b₁.θ
 
-    a = σ''.(u.W₂.θ * σ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (σ'.(Σ) .* u.dζ)) .* (u.W₂.θ * (σ'.(Σ) .* u.dξ))
+    a = ddφ.(u.W₂.θ * φ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (dφ.(Σ) .* u.dζ)) .* (u.W₂.θ * (dφ.(Σ) .* u.dξ))
 
-    b = σ'.( u.W₂.θ * σ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (σ''.(Σ) .* u.dξ .* u.dζ) )
+    b = dφ.( u.W₂.θ * φ.(Σ) .+ u.b₂.θ) .* (u.W₂.θ * (ddφ.(Σ) .* u.dξ .* u.dζ) )
 
     return u.W₃.θ * (a .+ b)
 end
@@ -317,7 +344,7 @@ function Adam_step(P::Adam, ∇P::AbstractArray)
 end
 
 # given a NN and its gradient, update each parameter
-function Adam_update(u::NeuralNet, ∇u)
+function Adam_update(u , ∇u)
     for p in u.Π
         Adam_step(p, ∇u[p.θ])
     end
@@ -333,4 +360,165 @@ function write_params(u)
     writedlm("NN_params/b2.csv", u.b₂.θ, ',')
     writedlm("NN_params/W3.csv", u.W₃.θ, ',')
     writedlm("NN_params/b3.csv", u.b₃.θ, ',')
+end
+
+
+
+"""
+The following is just a type for a NNet with 2 hidden layers
+"""
+# define a few neural nets with varying number of layers, only two spatial dims
+# needed
+mutable struct TwoLayerNN
+    Wₓ::Adam
+    Wᵧ::Adam
+    b₁::Adam
+    W₂::Adam
+    b₂::Adam
+
+
+    Π::Tuple
+    π::Flux.Params
+
+    function TwoLayerNN(hidden_dims::Integer, out_dims::Integer, spatial_dim::Integer=2)
+        Wₓ = Adam(hidden_dims, 1)
+        Wᵧ = Adam(hidden_dims, 1)
+        b₁ = Adam(hidden_dims, 1)
+        W₂ = Adam(out_dims, hidden_dims)
+        b₂ = Adam(out_dims, 1)
+
+        Π = (Wₓ, Wᵧ, b₁, W₂, b₂)
+        π = Flux.params(Wₓ.θ, Wᵧ.θ, b₁.θ, W₂.θ, b₂.θ)
+
+        new(Wₓ, Wᵧ, b₁, W₂, b₂, Π, π);
+    end
+end
+
+# define a forward-pass rule for each different input size
+(u::TwoLayerNN)(x, t) = u.W₂.θ * φ.(u.Wₓ.θ*x .+ u.Wᵧ.θ*t .+ u.b₁.θ) .+ u.b₂.θ
+
+mutable struct FirstNetDerivative_2L
+    Wₓ::Adam
+    Wᵧ::Adam
+    b₁::Adam
+    W₂::Adam
+    b₂::Adam
+
+    dξ::AbstractArray
+
+    function FirstNetDerivative_2L(u::TwoLayerNN, d)
+        Wₓ = u.Wₓ
+        Wᵧ = u.Wᵧ
+
+        b₁ = u.b₁
+        W₂ = u.W₂
+        b₂ = u.b₂
+
+
+        if d == "x₁"
+            dξ = Wₓ.θ
+
+        elseif d == "x₂"
+            dξ = Wᵧ.θ
+        else
+            print("Must specify x₁. x₂, or x₃ as a string literal argument.")
+        end
+
+        new(Wₓ, Wᵧ, b₁, W₂, b₂, dξ)
+    end
+
+
+end
+
+(u::FirstNetDerivative_2L)(x, t) =  u.W₂.θ *( dφ.(u.Wₓ.θ*x .+ u.Wᵧ.θ*t .+ u.b₁.θ) .* u.dξ)
+
+
+
+
+
+mutable struct FourLayerNN
+    Wₓ::Adam
+    Wᵧ::Adam
+    b₁::Adam
+    W₂::Adam
+    b₂::Adam
+    W₃::Adam
+    b₃::Adam
+    W₄::Adam
+    b₄::Adam
+
+    Π::Tuple
+    π::Flux.Params
+
+    function FourLayerNN(hidden_dims::Integer, out_dims::Integer, spatial_dim::Integer=1)
+        Wₓ = Adam(hidden_dims, 1)
+        Wᵧ = Adam(hidden_dims, 1)
+        b₁ = Adam(hidden_dims, 1)
+        W₂ = Adam(hidden_dims, hidden_dims)
+        b₂ = Adam(hidden_dims, 1)
+        W₃ = Adam(hidden_dims, hidden_dims)
+        b₃ = Adam(hidden_dims, 1)
+        W₄ = Adam(out_dims, hidden_dims)
+        b₄ = Adam(out_dims, 1)
+
+
+        Π = (Wₓ, Wᵧ, b₁, W₂, b₂, W₃, b₃, W₄, b₄)
+        π = Flux.params(Wₓ.θ, Wᵧ.θ, b₁.θ, W₂.θ, b₂.θ, W₃.θ, b₃.θ, W₄.θ, b₄.θ)
+
+        new(Wₓ, Wᵧ, b₁, W₂, b₂, W₃, b₃,W₄, b₄, Π, π);
+    end
+end
+
+# define a forward-pass rule for each different input size
+(u::FourLayerNN)(x, y) = u.W₄.θ * φ.(
+                         u.W₃.θ * φ.(
+                         u.W₂.θ * φ.(
+                         u.Wₓ.θ*x + u.Wᵧ.θ*y .+ u.b₁.θ) .+ u.b₂.θ) .+ u.b₃.θ ) .+ u.b₄.θ
+
+
+mutable struct FirstNetDerivative_4L
+    Wₓ::Adam
+    Wᵧ::Adam
+    b₁::Adam
+    W₂::Adam
+    b₂::Adam
+    W₃::Adam
+    b₃::Adam
+    W₄::Adam
+    b₄::Adam
+
+    dξ::AbstractArray
+
+    function FirstNetDerivative_4L(u::FourLayerNN, d)
+        Wₓ = u.Wₓ
+        Wᵧ = u.Wᵧ
+        b₁ = u.b₁
+        W₂ = u.W₂
+        b₂ = u.b₂
+        W₃ = u.W₃
+        b₃ = u.b₃
+        W₄ = u.W₄
+        b₄ = u.b₄
+
+        if d == "x₁"
+            dξ = Wₓ.θ
+        elseif d == "x₂"
+            dξ = Wᵧ.θ
+        else
+            print("Must specify x₁. x₂, or x₃ as a string literal argument.")
+        end
+
+        new(Wₓ, Wᵧ, b₁, W₂, b₂, W₃, b₃, W₄, b₄, dξ)
+    end
+end
+# supply a derivative computation for each input size
+
+
+function (u::FirstNetDerivative_4L)(x, t)
+    Σ = u.Wₓ.θ*x .+ u.Wᵧ.θ*t .+ u.b₁.θ
+    b =  u.W₄.θ * ( dφ.(u.W₃.θ * φ.(u.W₂.θ * φ.(Σ) .+ u.b₂.θ) .+ u.b₃.θ)
+                 .* u.W₃.θ * (dφ.(u.W₂.θ * φ.(Σ) .+ u.b₂.θ)
+                 .* u.W₂.θ * (dφ.(Σ) .* u.dξ)))
+
+    return b
 end
